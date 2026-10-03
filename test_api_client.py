@@ -37,7 +37,7 @@ def test_ocr_puis_extraction():
         assert api_client.extraire_facture("TOTAL 12,5 TND")["total"] == 12.5
 
 
-<<<<<<< HEAD
+
 # ---- Tests de la validation du JSON Gemini ----
 
 def test_facture_valide():
@@ -65,7 +65,7 @@ def test_json_invalide_de_gemini(monkeypatch):
     monkeypatch.setattr(api_client, "gemini", lambda prompt, json_attendu=False: "pas du json")
     with pytest.raises(api_client.ApiError):
         api_client.extraire_facture("texte quelconque")
-=======
+
 @pytest.fixture(autouse=True)
 def vider_cache_ocr():
     api_client._cache_ocr.clear()
@@ -112,4 +112,3 @@ def test_ocr_cache_evite_un_second_appel():
         api_client.ocr(b"img", "f.jpg")
         api_client.ocr(b"img", "f.jpg")
         assert mock.call_count == 1
->>>>>>> 2757f7ca8d83b0547697dc15a1c1c3d16318b9d5

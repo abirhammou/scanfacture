@@ -140,5 +140,4 @@ if __name__ == "__main__":
     Total TTC : 245,500 TND"""
     print(extraire_facture(texte))
 
-    return json.loads(gemini(prompt, json_attendu=True))
 
