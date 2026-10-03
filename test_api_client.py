@@ -18,9 +18,11 @@ def cles(monkeypatch):
 
 
 def test_quota_depasse_donne_une_erreur_claire():
-    with patch("api_client.requests.request", return_value=fausse_reponse({}, 429)):
-        with pytest.raises(api_client.ApiError, match="429"):
-            api_client.extraire_facture("x")
+    with (
+        patch("api_client.requests.request", return_value=fausse_reponse({}, 429)),
+        pytest.raises(api_client.ApiError, match="429"),
+    ):
+        api_client.extraire_facture("x")
 
 
 def test_ocr_puis_extraction():
@@ -30,3 +32,51 @@ def test_ocr_puis_extraction():
     gem = {"candidates": [{"content": {"parts": [{"text": '{"total": 12.5, "devise": "TND"}'}]}}]}
     with patch("api_client.requests.request", return_value=fausse_reponse(gem)):
         assert api_client.extraire_facture("TOTAL 12,5 TND")["total"] == 12.5
+
+
+@pytest.fixture(autouse=True)
+def vider_cache_ocr():
+    api_client._cache_ocr.clear()
+
+
+OCR_OK = {"IsErroredOnProcessing": False, "ParsedResults": [{"ParsedText": "TOTAL 12,5 TND"}]}
+
+
+def test_ocr_fichier_trop_lourd():
+    with pytest.raises(api_client.ApiError, match="1 Mo"):
+        api_client.ocr(b"x" * (1024 * 1024 + 1), "f.jpg")
+
+
+def test_ocr_fichier_vide():
+    with pytest.raises(api_client.ApiError, match="vide"):
+        api_client.ocr(b"", "f.jpg")
+
+
+def test_ocr_format_non_supporte():
+    with pytest.raises(api_client.ApiError, match="Format"):
+        api_client.ocr(b"img", "f.gif")
+
+
+def test_ocr_erreur_du_service():
+    rep = {"IsErroredOnProcessing": True, "ErrorMessage": ["Fichier illisible"]}
+    with (
+        patch("api_client.requests.request", return_value=fausse_reponse(rep)),
+        pytest.raises(api_client.ApiError, match="OCR impossible"),
+    ):
+        api_client.ocr(b"img", "f.jpg")
+
+
+def test_ocr_aucun_texte():
+    rep = {"IsErroredOnProcessing": False, "ParsedResults": [{"ParsedText": "  "}]}
+    with (
+        patch("api_client.requests.request", return_value=fausse_reponse(rep)),
+        pytest.raises(api_client.ApiError, match="Aucun texte"),
+    ):
+        api_client.ocr(b"img", "f.jpg")
+
+
+def test_ocr_cache_evite_un_second_appel():
+    with patch("api_client.requests.request", return_value=fausse_reponse(OCR_OK)) as mock:
+        api_client.ocr(b"img", "f.jpg")
+        api_client.ocr(b"img", "f.jpg")
+        assert mock.call_count == 1

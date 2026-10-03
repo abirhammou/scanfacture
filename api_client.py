@@ -1,5 +1,6 @@
 """Client API de l'équipe 4 — ScanFacture (OCR.space + Gemini)."""
 
+import hashlib
 import json
 import os
 
@@ -53,19 +54,43 @@ def gemini(prompt, json_attendu=False):
 
 
 OCR_URL = "https://api.ocr.space/parse/image"
+TAILLE_MAX_OCR = 1024 * 1024  # 1 Mo : limite de l'offre gratuite OCR.space
+EXTENSIONS_OCR = {".jpg", ".jpeg", ".png", ".pdf"}
+_cache_ocr = {}
 
 
 def ocr(contenu, nom_fichier, langue="fre"):
     """Extrait le texte d'une image (jpg, png, pdf). « helloworld » = clé de démo très limitée."""
+    if not contenu:
+        raise ApiError("Fichier vide.")
+    if len(contenu) > TAILLE_MAX_OCR:
+        taille = len(contenu) / (1024 * 1024)
+        raise ApiError(f"Fichier trop lourd ({taille:.1f} Mo) : maximum 1 Mo avec OCR.space gratuit.")
+    if os.path.splitext(nom_fichier)[1].lower() not in EXTENSIONS_OCR:
+        raise ApiError("Format non supporté : utilisez jpg, png ou pdf.")
+
+    empreinte = hashlib.sha256(contenu).hexdigest() + langue
+    if empreinte in _cache_ocr:
+        return _cache_ocr[empreinte]
+
     data = requete(
         "POST", OCR_URL,
         data={"apikey": os.getenv("OCR_SPACE_KEY", "helloworld"), "language": langue},
         files={"file": (nom_fichier, contenu)},
     ).json()
     if data.get("IsErroredOnProcessing"):
-        raise ApiError(f"OCR impossible : {data.get('ErrorMessage')}")
-    return data["ParsedResults"][0]["ParsedText"]
+        message = data.get("ErrorMessage")
+        if isinstance(message, list):
+            message = " ".join(message)
+        raise ApiError(f"OCR impossible : {message}")
 
+    resultats = data.get("ParsedResults") or []
+    texte = "\n".join(r.get("ParsedText", "") for r in resultats).strip()
+    if not texte:
+        raise ApiError("Aucun texte détecté : essayez une photo plus nette et mieux éclairée.")
+
+    _cache_ocr[empreinte] = texte
+    return texte
 
 def extraire_facture(texte_ocr):
     """Demande à Gemini un JSON {fournisseur, date, total, devise}."""
