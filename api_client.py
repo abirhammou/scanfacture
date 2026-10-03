@@ -2,6 +2,7 @@
 
 import json
 import os
+from datetime import datetime
 
 import requests
 from dotenv import load_dotenv
@@ -36,6 +37,7 @@ def requete(methode, url, **kwargs):
         raise ApiError(f"Erreur {reponse.status_code} : {reponse.text[:200]}")
     return reponse
 
+
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 GEMINI_MODELE = os.getenv("GEMINI_MODELE", "gemini-3.5-flash")
 
@@ -67,11 +69,47 @@ def ocr(contenu, nom_fichier, langue="fre"):
     return data["ParsedResults"][0]["ParsedText"]
 
 
+def valider_facture(data):
+    """Vérifie le JSON extrait : date AAAA-MM-JJ valide, total numérique."""
+    if not isinstance(data, dict):
+        raise ApiError("Réponse Gemini inattendue : un objet JSON est attendu.")
+
+    # date au format AAAA-MM-JJ
+    try:
+        datetime.strptime(str(data.get("date")), "%Y-%m-%d")
+    except ValueError as exc:
+        raise ApiError(f"Date invalide : {data.get('date')!r}") from exc
+
+    # total numérique
+    total = data.get("total")
+    if isinstance(total, bool) or total is None:
+        raise ApiError(f"Total invalide : {total!r}")
+    try:
+        data["total"] = float(total)
+    except (TypeError, ValueError) as exc:
+        raise ApiError(f"Total invalide : {total!r}") from exc
+
+    return data
+
+
 def extraire_facture(texte_ocr):
-    """Demande à Gemini un JSON {fournisseur, date, total, devise}."""
+    """Demande à Gemini un JSON {fournisseur, date, total, devise}, puis le valide."""
     prompt = (
         "Extrais de ce texte de facture un objet JSON avec les clés "
         "fournisseur, date (AAAA-MM-JJ), total (nombre), devise. "
         "Mets null si une information est absente.\n\n" + texte_ocr
     )
-    return json.loads(gemini(prompt, json_attendu=True))
+    brut = gemini(prompt, json_attendu=True)
+    try:
+        data = json.loads(brut)
+    except json.JSONDecodeError as exc:
+        raise ApiError(f"Gemini n'a pas renvoyé un JSON valide : {brut[:100]}") from exc
+    return valider_facture(data)
+
+
+if __name__ == "__main__":
+    # Test rapide : python api_client.py
+    texte = """STE ALPHA SARL
+    Facture du 12/09/2026
+    Total TTC : 245,500 TND"""
+    print(extraire_facture(texte))
