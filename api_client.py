@@ -1,3 +1,6 @@
+```python
+"""Client API de l'équipe 4 — ScanFacture (OCR.space + Gemini)."""
+
 import hashlib
 import json
 import os
@@ -23,6 +26,7 @@ requete = os.getenv("GEMINI_API_KEY")
 
 def gemini(prompt, json_attendu=False):
     """Envoie un prompt à Gemini et retourne le texte généré."""
+
     if not requete:
         raise ApiError("GEMINI_API_KEY manquante dans le fichier .env.")
 
@@ -54,13 +58,16 @@ def gemini(prompt, json_attendu=False):
             json=payload,
             timeout=60,
         )
+
         response.raise_for_status()
+
         data = response.json()
 
         return data["candidates"][0]["content"]["parts"][0]["text"]
 
     except requests.RequestException as exc:
         raise ApiError(f"Erreur Gemini : {exc}") from exc
+
     except (KeyError, IndexError, TypeError) as exc:
         raise ApiError("Réponse Gemini inattendue.") from exc
 
@@ -71,17 +78,22 @@ def ocr(fichier):
 
     Le fichier est vérifié, puis envoyé à OCR.space.
     """
+
     if not cle:
         raise ApiError("OCR_SPACE_KEY manquante dans le fichier .env.")
 
     if not os.path.exists(fichier):
         raise ApiError(f"Fichier introuvable : {fichier}")
 
+    # Taille maximale autorisée
     taille_max = 10 * 1024 * 1024
 
     if os.path.getsize(fichier) > taille_max:
-        raise ApiError("Le fichier dépasse la taille maximale autorisée de 10 Mo.")
+        raise ApiError(
+            "Le fichier dépasse la taille maximale autorisée de 10 Mo."
+        )
 
+    # Extensions autorisées
     extensions_autorisees = {
         ".png",
         ".jpg",
@@ -97,9 +109,11 @@ def ocr(fichier):
         raise ApiError(f"Extension non autorisée : {extension}")
 
     try:
+        # Lecture du fichier
         with open(fichier, "rb") as fichier_ouvert:
             contenu = fichier_ouvert.read()
 
+        # Hash du fichier
         fichier_hash = hashlib.sha256(contenu).hexdigest()
 
         response = requests.post(
@@ -120,6 +134,7 @@ def ocr(fichier):
         )
 
         response.raise_for_status()
+
         data = response.json()
 
         if data.get("IsErroredOnProcessing"):
@@ -130,17 +145,25 @@ def ocr(fichier):
         parsed_results = data.get("ParsedResults")
 
         if not parsed_results:
-            raise ApiError("Aucun texte n'a été extrait par OCR.")
+            raise ApiError(
+                "Aucun texte n'a été extrait par OCR."
+            )
 
-        texte = parsed_results[0].get("ParsedText", "")
+        texte = "\n".join(
+            result.get("ParsedText", "")
+            for result in parsed_results
+        ).strip()
 
-        if not texte.strip():
-            raise ApiError("Le texte extrait par OCR est vide.")
+        if not texte:
+            raise ApiError(
+                "Le texte extrait par OCR est vide."
+            )
 
         return texte
 
     except requests.RequestException as exc:
         raise ApiError(f"Erreur OCR : {exc}") from exc
+
     except (ValueError, TypeError) as exc:
         raise ApiError("Réponse OCR invalide.") from exc
 
@@ -153,16 +176,19 @@ def valider_facture(data):
             "Réponse Gemini inattendue : un objet JSON est attendu."
         )
 
+    # Validation de la date
     try:
         datetime.strptime(
             str(data.get("date")),
             "%Y-%m-%d"
         )
+
     except ValueError as exc:
         raise ApiError(
             f"Date invalide : {data.get('date')!r}"
         ) from exc
 
+    # Validation du total
     total = data.get("total")
 
     if isinstance(total, bool) or total is None:
@@ -172,6 +198,7 @@ def valider_facture(data):
 
     try:
         data["total"] = float(total)
+
     except (TypeError, ValueError) as exc:
         raise ApiError(
             f"Total invalide : {total!r}"
@@ -182,9 +209,16 @@ def valider_facture(data):
 
 def extraire_facture(texte_ocr):
     """
-    Demande à Gemini un JSON
-    {fournisseur, date, total, devise},
-    puis le valide.
+    Demande à Gemini un JSON contenant :
+
+    {
+        fournisseur,
+        date,
+        total,
+        devise
+    }
+
+    puis valide les données retournées.
     """
 
     if not texte_ocr or not texte_ocr.strip():
@@ -209,6 +243,8 @@ Retourne uniquement un objet JSON avec cette structure :
     "devise": "..."
 }}
 
+Si une information est absente, utilise null.
+
 Texte OCR :
 {texte_ocr}
 """
@@ -220,9 +256,29 @@ Texte OCR :
 
     try:
         data = json.loads(brut)
+
     except json.JSONDecodeError as exc:
         raise ApiError(
             f"Gemini n'a pas renvoyé un JSON valide : {brut[:100]}"
         ) from exc
 
     return valider_facture(data)
+
+
+if __name__ == "__main__":
+    # Test rapide :
+    # python api_client.py
+
+    texte = """
+    STE ALPHA SARL
+    Facture du 12/09/2026
+    Total TTC : 245,500 TND
+    """
+
+    try:
+        resultat = extraire_facture(texte)
+        print(json.dumps(resultat, indent=4, ensure_ascii=False))
+
+    except ApiError as exc:
+        print(f"Erreur : {exc}")
+```
