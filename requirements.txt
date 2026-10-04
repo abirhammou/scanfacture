@@ -1,6 +1,7 @@
-requests
-python-dotenv
-streamlit
-pytest
-ruff
-bandit
+requests>=2.32.0
+python-dotenv>=1.0.0
+streamlit>=1.40.0
+pandas>=3.0.0
+pytest>=8.0.0
+ruff>=0.7.0
+bandit>=1.7.0
