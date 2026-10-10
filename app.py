@@ -1,6 +1,7 @@
 """ScanFacture — Page d'accueil."""
 
 import streamlit as st
+import auth
 
 st.set_page_config(
     page_title="ScanFacture",
@@ -134,6 +135,10 @@ section[data-testid="stMain"] {
 .footer span { color:#6c63ff55; }
 </style>
 """, unsafe_allow_html=True)
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+auth.require_login()
+auth.sidebar_user_widget()
 
 # ── Session state ─────────────────────────────────────────────────────────────
 if "factures" not in st.session_state:

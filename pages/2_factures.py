@@ -7,10 +7,13 @@ import pandas as pd
 import streamlit as st
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+import auth
 from style import inject
 
 st.set_page_config(page_title="Factures — ScanFacture", page_icon="📋", layout="wide")
 inject()
+auth.require_login()
+auth.sidebar_user_widget()
 
 st.header("📋 Mes factures")
 
@@ -29,7 +32,7 @@ if menu == "📋 Liste":
         st.dataframe(df[cols], use_container_width=True, hide_index=True)
         csv = df[cols].to_csv(index=False).encode("utf-8-sig")
         st.download_button("⬇️ Exporter en CSV", data=csv, file_name="factures.csv", mime="text/csv")
-        if st.button("🗑️ Vider la liste"):
+        if auth.is_admin() and st.button("🗑️ Vider la liste"):
             st.session_state.factures = []
             st.rerun()
 

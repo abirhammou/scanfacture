@@ -12,10 +12,17 @@ import streamlit as st
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import validation
 from validation import ErreurValidation
+import auth
 from style import inject
 
 st.set_page_config(page_title="Validation — ScanFacture", page_icon="✅", layout="wide")
 inject()
+auth.require_login()
+auth.sidebar_user_widget()
+
+if not auth.is_admin():
+    st.warning("⛔ Accès réservé aux administrateurs.")
+    st.stop()
 
 st.header("🔍 Validation des données")
 st.caption("Valide manuellement un JSON issu de Gemini : format, doublons, champs requis.")
