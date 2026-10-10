@@ -8,10 +8,17 @@ import streamlit as st
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from api_client import ApiError, extraire_facture
+import auth
 from style import inject
 
 st.set_page_config(page_title="Test Gemini — ScanFacture", page_icon="🧠", layout="wide")
 inject()
+auth.require_login()
+auth.sidebar_user_widget()
+
+if not auth.is_admin():
+    st.warning("⛔ Accès réservé aux administrateurs.")
+    st.stop()
 
 st.header("🧠 Test Gemini")
 st.caption("Colle directement un texte de facture pour tester l'extraction Gemini sans passer par l'OCR.")
